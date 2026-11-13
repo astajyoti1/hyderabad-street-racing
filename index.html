@@ -51,11 +51,21 @@ h1 span{display:block;font-family:'Noto Sans Telugu',var(--fb);font-size:22px;fo
 #cars{display:grid;grid-template-columns:repeat(5,1fr);gap:8px}
 .car{background:#1d232b;border:1px solid var(--line);border-radius:8px;padding:8px 9px 9px;text-align:left;min-width:0}
 .car[aria-pressed="true"]{border-color:var(--kerb);background:#262d36}
-.car b{display:block;font-family:var(--fd);font-weight:500;font-size:21px;line-height:.95;text-transform:uppercase;min-height:40px}
+.car b{display:block;font-family:var(--fd);font-weight:500;font-size:21px;line-height:.95;text-transform:uppercase;min-height:40px;overflow-wrap:anywhere}
 .car i{display:block;font-style:normal;font-size:11px;line-height:1.25;color:var(--dim);margin:2px 0 6px;min-height:28px}
 .bar{height:4px;background:#0c0e11;border-radius:2px;margin-top:3px}
 .bar u{display:block;height:100%;background:var(--ink);border-radius:2px}
 .car.locked{opacity:.5;cursor:not-allowed}
+ #driver{display:flex;flex-wrap:wrap;gap:12px 22px;align-items:flex-start}
+.fld{display:flex;flex-direction:column;gap:5px;min-width:0}
+.fld label,.fld .lb{font-size:11px;color:var(--dim);letter-spacing:.6px;text-transform:uppercase}
+#pname{background:#0c0e11;border:1px solid var(--line);border-radius:6px;color:var(--ink);font:500 16px var(--fb);padding:7px 10px;width:190px;max-width:100%;-webkit-user-select:text;user-select:text}
+#pname:focus{outline:2px solid var(--kerb);outline-offset:1px}
+#diff{display:flex;border:1px solid var(--line);border-radius:6px;overflow:hidden}
+#diff button{background:#1d232b;border:0;border-right:1px solid var(--line);padding:6px 16px 3px;font-family:var(--fd);font-size:21px;line-height:1.1;text-transform:uppercase;letter-spacing:.4px}
+#diff button:last-child{border-right:0}
+#diff button[aria-pressed="true"]{background:var(--kerb);color:#111}
+.dd{font-size:12px;color:var(--dim)}
 .gl{font-size:11px;color:var(--dim);display:flex;justify-content:space-between;margin-bottom:6px}
 #go{display:flex;gap:10px;align-items:stretch}
 #start{flex:1;background:var(--kerb);color:#111;border:0;border-radius:8px;font-family:var(--fd);font-weight:600;font-size:34px;line-height:1;padding:12px 18px 8px;text-transform:uppercase;letter-spacing:1px}
@@ -160,6 +170,10 @@ kbd{font:600 11.5px var(--fb);background:#0c0e11;border:1px solid var(--line);bo
   </div>
   <div id="dock">
     <div class="card" id="info"></div>
+    <div class="card" id="driver">
+      <div class="fld"><label for="pname">Driver name</label><input id="pname" type="text" maxlength="14" placeholder="Your name" autocomplete="off" spellcheck="false"></div>
+      <div class="fld"><span class="lb" id="dlb">Difficulty</span><div id="diff" role="group" aria-labelledby="dlb"></div><span class="dd" id="ddesc"></span></div>
+    </div>
     <div class="card">
       <div class="gl"><span>Garage</span><span>bars: top speed · acceleration · grip</span></div>
       <div id="cars"></div>
@@ -194,7 +208,7 @@ kbd{font:600 11.5px var(--fb);background:#0c0e11;border:1px solid var(--line);bo
 (function(){
 'use strict';
 const $=id=>document.getElementById(id);
-function fatal(msg){const e=$('err');e.textContent='The game hit a problem: '+msg+'. Reload the page. If it happens again, send this message to Claude.';e.hidden=false;}
+function fatal(msg){const e=$('err');e.textContent='The game hit a problem: '+msg+'. Reload the page and try again.';e.hidden=false;}
 window.addEventListener('error',e=>fatal((e.message||'script error')+' (line '+(e.lineno||'?')+')'));
 if(!window.THREE){fatal('the 3D library did not load');return;}
 
@@ -335,8 +349,11 @@ const LEVELS=[
 ];
 
 /* ================= save ================= */
-let SAVE={stars:[0,0,0,0,0],best:[0,0,0,0,0],car:0,level:0,gfx:1,snd:1};
-function loadSave(d){try{const s=(d&&d.save)||JSON.parse(localStorage.getItem('hydrace1')||'null');if(s&&s.stars)SAVE=Object.assign(SAVE,s);}catch(e){}}
+let SAVE={stars:[0,0,0,0,0],best:[0,0,0,0,0],car:0,level:0,gfx:1,snd:1,name:'',diff:1};
+const DIFF=[{n:'Easy',v:.9,s:.92,t:.6,nit:.06,d:'Slower rivals, less traffic, nitro refills faster'},{n:'Normal',v:1,s:1,t:1,nit:.04,d:'The standard race'},{n:'Hard',v:1.07,s:1.06,t:1.3,nit:.03,d:'Faster rivals, heavier traffic, nitro refills slowly'}];
+const esc=t=>String(t).replace(/[&<>"']/g,c=>'&#'+c.charCodeAt(0)+';');
+const pname=()=>(SAVE.name||'').trim()||'You';
+function loadSave(d){try{const s=(d&&d.save)||JSON.parse(localStorage.getItem('hydrace1')||'null');if(s&&s.stars)SAVE=Object.assign(SAVE,s);if(!DIFF[SAVE.diff])SAVE.diff=1;SAVE.name=String(SAVE.name||'').slice(0,14);}catch(e){}}
 function store(){try{localStorage.setItem('hydrace1',JSON.stringify(SAVE));}catch(e){}}
 const lvlOpen=i=>i===0||SAVE.stars[i-1]>0, carOpen=i=>i===0||SAVE.stars[i-1]>0;
 
@@ -772,15 +789,15 @@ function setupRace(){
   const tr=W.tr,N=tr.N,L=W.level,scene=W.scene,r=rng(555+W.li*31);
   for(const v of W.veh)scene.remove(v.g);if(PL.g)scene.remove(PL.g);
   W.veh=[];W.ai=[];W.all=[];
-  const fac=[.92,.95,.98,1,1.03],li=W.li;
-  for(let k=0;k<5;k++){const ci=clamp(li+(k>2?1:0)-(k===0?1:0),0,4),cs=CARS[ci],c=mkCar(cs.sp,{paint:[0x1f8a4a,0xe0701c,0x6a2f9a,0xc9ccd0,0x17191c][k],stripe:[0xf4f4f4,0x15171a,0xf2bb10,0xc0261c,0x35c8f0][k],num:[11,23,45,68,91][k],race:1}),vmax=L.aiV*fac[k]/3.6;
-    const v={g:c.g,L:c.L,W:c.W,ai:true,name:AINAMES[k],k:1,vmax:vmax,acc:5+li*1.1+k*.25,brk:11,prof:speedProfile(tr,10.2*L.skill*fac[k]*(W.env.wet?.85:1),8.5,vmax),s:0,d:0,dT:0,v:0,prog:0,lcT:0,fin:false,finT:0};
+  const fac=[.92,.95,.98,1,1.03],li=W.li,D=DIFF[SAVE.diff],nT=Math.round(L.traffic*D.t);
+  for(let k=0;k<5;k++){const ci=clamp(li+(k>2?1:0)-(k===0?1:0),0,4),cs=CARS[ci],c=mkCar(cs.sp,{paint:[0x1f8a4a,0xe0701c,0x6a2f9a,0xc9ccd0,0x17191c][k],stripe:[0xf4f4f4,0x15171a,0xf2bb10,0xc0261c,0x35c8f0][k],num:[11,23,45,68,91][k],race:1}),vmax=L.aiV*fac[k]*D.v/3.6;
+    const v={g:c.g,L:c.L,W:c.W,ai:true,name:AINAMES[k],k:1,vmax:vmax,acc:5+li*1.1+k*.25,brk:11,prof:speedProfile(tr,10.2*L.skill*fac[k]*D.s*(W.env.wet?.85:1),8.5,vmax),s:0,d:0,dT:0,v:0,prog:0,lcT:0,fin:false,finT:0};
     W.ai.push(v);W.veh.push(v);scene.add(c.g);}
   const tprof=speedProfile(tr,4.5,5,200);
-  for(let k=0;k<L.traffic;k++){const kind=L.mix[k%L.mix.length],c=mkTraffic(kind,r),slow=kind==='auto'||kind==='bike'||kind==='truck'||kind==='bus';
+  for(let k=0;k<nT;k++){const kind=L.mix[k%L.mix.length],c=mkTraffic(kind,r),slow=kind==='auto'||kind==='bike'||kind==='truck'||kind==='bus';
     const ln=slow?(r()<.75?0:Math.min(1,L.lanes-1)):(r()*L.lanes)|0,cr=lerp(L.tV[0],L.tV[1],slow?r()*.5:.4+r()*.6)/3.6;
     const d0=tr.lanesD[ln]+(kind==='bike'?(r()-.5)*1.2:0);
-    const v={g:c.g,L:c.L,W:c.W,ai:false,k:1,vmax:cr,acc:2.5,brk:7,prof:tprof,s:0,s0:N*(.07+.88*(k+r()*.6)/L.traffic),d0:d0,d:d0,dT:d0,v:cr*.8,prog:0,lcT:0,cr:cr};
+    const v={g:c.g,L:c.L,W:c.W,ai:false,k:1,vmax:cr,acc:2.5,brk:7,prof:tprof,s:0,s0:N*(.07+.88*(k+r()*.6)/nT),d0:d0,d:d0,dT:d0,v:cr*.8,prog:0,lcT:0,cr:cr};
     W.veh.push(v);scene.add(c.g);}
   if(L.extraR){for(let k=0;k<9;k++){const c=mkTraffic(L.mix[k%L.mix.length],r),d0=tr.hw+tr.vg+4+L.width/L.lanes*(.5+(k%L.lanes));
     const v={g:c.g,L:c.L,W:c.W,onc:true,v:(75+r()*40)/3.6,s:r()*N,d:d0,dT:d0};W.veh.push(v);scene.add(c.g);}}
@@ -822,7 +839,7 @@ function updateVeh(v,dt){
 const keys={up:0,down:0,left:0,right:0,hand:0,nitro:0};
 const KM={ArrowUp:'up',KeyW:'up',ArrowDown:'down',KeyS:'down',ArrowLeft:'left',KeyA:'left',ArrowRight:'right',KeyD:'right',Space:'hand',ShiftLeft:'nitro',ShiftRight:'nitro'};
 let camMode=0;
-window.addEventListener('keydown',e=>{const k=KM[e.code];if(k){keys[k]=1;if(RACE.state!=='menu')e.preventDefault();}
+window.addEventListener('keydown',e=>{if(e.target&&e.target.tagName==='INPUT'){if(e.code==='Enter')e.target.blur();return;}const k=KM[e.code];if(k){keys[k]=1;if(RACE.state!=='menu')e.preventDefault();}
   if(e.repeat)return;
   if(e.code==='KeyC')camMode=(camMode+1)%3;
   if(e.code==='KeyH')horn();
@@ -860,7 +877,7 @@ function updatePlayer(dt,ctrl){
   p.steer+=(st-p.steer)*Math.min(1,dt*(st===0?8:5));
   const fx=Math.sin(p.h),fz=Math.cos(p.h),rx=-fz,rz=fx;
   let vf=p.vx*fx+p.vz*fz,vl=p.vx*rx+p.vz*rz;
-  let nit=false;if(ctrl&&keys.nitro&&p.nitro>0&&thr&&vf>5){nit=true;p.nitro=Math.max(0,p.nitro-dt*.27);}else p.nitro=Math.min(1,p.nitro+dt*.04);
+  let nit=false;if(ctrl&&keys.nitro&&p.nitro>0&&thr&&vf>5){nit=true;p.nitro=Math.max(0,p.nitro-dt*.27);}else p.nitro=Math.min(1,p.nitro+dt*DIFF[SAVE.diff].nit);
   const off=Math.abs(p.d)>tr.hw+.2;let vmax=car.vmax/3.6*(nit?1.14:1);if(off)vmax*=.62;
   let a=0;
   if(thr){if(vf<vmax)a+=car.acc*(nit?1.6:1)*(1-Math.pow(Math.max(0,vf)/vmax,2))+(vf<0?6:0);else a-=3;}
@@ -950,7 +967,7 @@ function setState(s){RACE.state=s;$('menu').hidden=s!=='menu';$('hud').hidden=s=
   if(s==='paused')audioTick(0,0,0,0,false);}
 function startRace(){if(!lvlOpen(SAVE.level))return;initAudio();if(AU.ctx&&AU.ctx.state==='suspended')AU.ctx.resume();
   if(W.li!==SAVE.level||PL.car!==CARS[SAVE.car])buildWorld(SAVE.level);else resetGrid();
-  resetGrid();RACE.cd=4;RACE.cdN=4;$('where').textContent=W.level.name+' · '+W.env.label;$('lights').hidden=false;$('lights').className='';[].forEach.call($('lights').children,c=>c.className='');$('big').hidden=true;$('toast').hidden=true;
+  resetGrid();RACE.cd=4;RACE.cdN=4;$('where').textContent=pname()+' · '+W.level.name+' · '+DIFF[SAVE.diff].n;$('lights').hidden=false;$('lights').className='';[].forEach.call($('lights').children,c=>c.className='');$('big').hidden=true;$('toast').hidden=true;
   setState('countdown');updateCamera(0,true);}
 function finishRace(){
   const L=W.level,pos=1+W.ai.filter(v=>v.fin).length;RACE.fin=true;RACE.pos=pos;PL.fin=true;PL.finT=RACE.t;RACE.resT=2.2;
@@ -959,7 +976,7 @@ function finishRace(){
   toast(pos===1?'Winner!':ord(pos)+' place',3);beep(pos<=3?880:300,.5,'triangle',.2);
   $('rTitle').textContent=pos===1?'You won':pos<=3?'Podium · '+ord(pos):'Finished '+ord(pos);
   $('rStars').textContent='★★★'.slice(0,stars)+'☆☆☆'.slice(0,3-stars);
-  const rows=W.ai.map(v=>({n:v.name,t:v.fin?v.finT:Infinity,p:v.prog})).concat([{n:'You · '+PL.car.name,t:RACE.t,p:PL.prog,me:1}]).sort((a,b)=>a.t-b.t||b.p-a.p);
+  const rows=W.ai.map(v=>({n:v.name,t:v.fin?v.finT:Infinity,p:v.prog})).concat([{n:esc(pname())+' · '+PL.car.name,t:RACE.t,p:PL.prog,me:1}]).sort((a,b)=>a.t-b.t||b.p-a.p);
   $('rTable').innerHTML=rows.map((r,i)=>'<tr'+(r.me?' class="me"':'')+'><td>'+(i+1)+'. '+r.n+'</td><td>'+(isFinite(r.t)?fmtT(r.t):'still racing')+'</td></tr>').join('')+'<tr><td>Your best lap</td><td>'+fmtT(RACE.best)+'</td></tr>';
   let note='';
   if(stars&&!wasOpen){if(li<4)note='Unlocked: '+LEVELS[li+1].name+' and the '+CARS[li+1].name+'.';else note='You have finished every route in the city. Go back for three stars on each.';}
@@ -978,12 +995,15 @@ $('snd').onclick=()=>{SAVE.snd=SAVE.snd?0:1;store();if(AU.master)AU.master.gain.
 function renderMenu(){
   $('levels').innerHTML=LEVELS.map((l,i)=>{const o=lvlOpen(i),s=SAVE.stars[i];return '<button type="button" class="sign'+(o?'':' locked')+'" data-i="'+i+'" aria-pressed="'+(SAVE.level===i)+'"><span class="no">'+(i+1)+'</span><span class="nm">'+l.name+'<small>'+l.te+'</small></span><span class="st">'+(o?'★★★'.slice(0,s)+'☆☆☆'.slice(0,3-s):'Locked')+'</span></button>';}).join('');
   const l=LEVELS[SAVE.level],o=lvlOpen(SAVE.level),km=W&&W.li===SAVE.level?(W.tr.len/1000).toFixed(1):'–';
-  $('info').innerHTML='<div class="area">Route '+(SAVE.level+1)+' · '+l.area+'</div><h2>'+l.name+'</h2><p>'+(o?l.blurb:'Finish in the top three on '+LEVELS[SAVE.level-1].name+' to open this route.')+'</p><div class="chips"><span class="chip"><b>'+l.laps+'</b> laps × <b>'+km+'</b> km</span><span class="chip">'+ENVS[l.env].label+'</span><span class="chip">Rivals up to <b>'+Math.round(l.aiV*1.03)+'</b> km/h</span><span class="chip"><b>'+l.traffic+'</b> vehicles in traffic</span>'+(SAVE.best[SAVE.level]?'<span class="chip">Your best <b>'+fmtT(SAVE.best[SAVE.level])+'</b></span>':'')+'</div>';
+  $('info').innerHTML='<div class="area">Route '+(SAVE.level+1)+' · '+l.area+'</div><h2>'+l.name+'</h2><p>'+(o?l.blurb:'Finish in the top three on '+LEVELS[SAVE.level-1].name+' to open this route.')+'</p><div class="chips"><span class="chip"><b>'+l.laps+'</b> laps × <b>'+km+'</b> km</span><span class="chip">'+ENVS[l.env].label+'</span><span class="chip">Rivals up to <b>'+Math.round(l.aiV*1.03*DIFF[SAVE.diff].v)+'</b> km/h</span><span class="chip"><b>'+Math.round(l.traffic*DIFF[SAVE.diff].t)+'</b> vehicles in traffic</span>'+(SAVE.best[SAVE.level]?'<span class="chip">Your best <b>'+fmtT(SAVE.best[SAVE.level])+'</b></span>':'')+'</div>';
   $('cars').innerHTML=CARS.map((c,i)=>{const op=carOpen(i);return '<button type="button" class="car'+(op?'':' locked')+'" data-i="'+i+'" aria-pressed="'+(SAVE.car===i)+'"'+(op?'':' aria-disabled="true"')+'><b>'+c.name+'</b><i>'+(op?c.cls+' · '+c.vmax+' km/h':'Podium on route '+i)+'</i><div class="bar"><u style="width:'+(c.vmax/3.05)+'%"></u></div><div class="bar"><u style="width:'+(c.acc/.108)+'%"></u></div><div class="bar"><u style="width:'+(c.grip/.165)+'%"></u></div></button>';}).join('');
   $('start').textContent=o?'Start race':'Route locked';$('start').disabled=!o;$('start').style.opacity=o?1:.5;
+  $('diff').innerHTML=DIFF.map((d,i)=>'<button type="button" data-i="'+i+'" aria-pressed="'+(SAVE.diff===i)+'">'+d.n+'</button>').join('');$('ddesc').textContent=DIFF[SAVE.diff].d;
   $('gfx').textContent='Graphics: '+(SAVE.gfx?'High':'Low');$('snd').textContent='Sound: '+(SAVE.snd?'On':'Off');
 }
 $('levels').addEventListener('click',e=>{const b=e.target.closest('.sign');if(!b)return;const i=+b.dataset.i;if(i===SAVE.level)return;SAVE.level=i;store();$('loading').hidden=false;renderMenu();setTimeout(()=>{buildWorld(i);$('loading').hidden=true;renderMenu();},30);});
+$('diff').addEventListener('click',e=>{const b=e.target.closest('button');if(!b)return;const i=+b.dataset.i;if(i===SAVE.diff)return;SAVE.diff=i;store();setupRace();renderMenu();});
+$('pname').addEventListener('input',e=>{SAVE.name=e.target.value.slice(0,14);store();});
 $('cars').addEventListener('click',e=>{const b=e.target.closest('.car');if(!b)return;const i=+b.dataset.i;if(!carOpen(i)||i===SAVE.car)return;SAVE.car=i;store();setupRace();renderMenu();});
 
 /* ================= main loop ================= */
@@ -1019,7 +1039,7 @@ function frame(){
 
 function boot(data){
   loadSave(data);if(!lvlOpen(SAVE.level))SAVE.level=0;if(!carOpen(SAVE.car))SAVE.car=0;
-  resize();buildWorld(SAVE.level);setState('menu');renderMenu();frame();
+  resize();buildWorld(SAVE.level);setState('menu');renderMenu();$('pname').value=SAVE.name;frame();
   const hot=window.claude&&window.claude.hot;if(hot&&hot.snapshot)hot.snapshot(()=>({save:SAVE}));
 }
 const hot=window.claude&&window.claude.hot;
