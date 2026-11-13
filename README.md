@@ -4,7 +4,9 @@ A browser 3D racing game set on five Hyderabad routes: Necklace Road, Charminar 
 
 ## Play
 
-Open `index.html` in a modern browser (needs internet once, to load three.js r128 and fonts from a CDN). No build step.
+**Play it in your browser: [Hyderabad Street Racing](https://astajyoti1.github.io/hyderabad-street-racing/)**
+
+To run it locally, open `index.html` in a modern browser (needs internet once, to load three.js r128 and fonts from a CDN). No build step.
 
 ## Controls
 
